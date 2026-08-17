@@ -35,8 +35,6 @@
     display:flex; flex-direction:column; height:100vh; height:100dvh; width:100vw;
     padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);
   }
-
-  /* ---------- Header ---------- */
   header{
     display:flex; align-items:center; justify-content:space-between;
     padding:14px 18px 10px 18px; flex-shrink:0;
@@ -59,8 +57,6 @@
   .status-pill.on .dot{ background:var(--live); box-shadow:0 0 8px var(--live-glow); animation: blink 1.2s ease-in-out infinite; }
   .status-pill.on{ color:#f0a99b; border-color: rgba(232,89,63,0.3); }
   @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
-
-  /* ---------- Panels ---------- */
   .panels{ flex:1; display:flex; flex-direction:column; min-height:0; position:relative; }
   .panel{
     flex:1; min-height:0; overflow-y:auto; padding:10px 18px 22px 18px;
@@ -76,7 +72,6 @@
   #thPanel{ background: linear-gradient(180deg, #14181f 0%, var(--ink) 100%); }
   #zhPanel .panel-label{ color:var(--zh-dim); background: linear-gradient(180deg, var(--ink) 60%, transparent);}
   #thPanel .panel-label{ color:var(--th-dim); background: linear-gradient(180deg, #14181f 60%, transparent);}
-
   .line{
     margin-bottom:14px; line-height:1.5; opacity:0; transform:translateY(6px);
     animation: rise .35s ease forwards;
@@ -89,8 +84,6 @@
   .placeholder{ color:var(--text-dim); font-size:13px; padding:30px 0; text-align:center; opacity:.7; }
   #zhPanel .placeholder{ font-family:'Inter',sans-serif; }
   #thPanel .placeholder{ font-family:'Inter',sans-serif; }
-
-  /* ---------- Pulse divider (signature element) ---------- */
   .divider{
     height:34px; flex-shrink:0; position:relative; z-index:3;
     background:var(--ink);
@@ -98,8 +91,6 @@
     border-top:1px solid var(--line); border-bottom:1px solid var(--line);
   }
   #pulseCanvas{ width:100%; height:100%; display:block; }
-
-  /* ---------- Footer / controls ---------- */
   footer{
     flex-shrink:0; padding:16px 18px calc(18px + env(safe-area-inset-bottom)) 18px;
     display:flex; align-items:center; justify-content:center; gap:22px;
@@ -127,7 +118,6 @@
     padding:8px; min-width:96px; text-align:right;
   }
   .clear-btn:active{ color:var(--text); }
-
   .unsupported{
     display:none; flex-direction:column; align-items:center; justify-content:center;
     height:100%; text-align:center; padding:40px; gap:14px;
@@ -146,7 +136,6 @@
     </div>
     <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">พร้อมใช้งาน</span></div>
   </header>
-
   <div class="panels">
     <div class="panel" id="zhPanel">
       <div class="panel-label">中文原文 · Speech</div>
@@ -158,7 +147,6 @@
       <div id="thContent"><div class="placeholder">คำแปลจะขึ้นที่นี่แบบเรียลไทม์</div></div>
     </div>
   </div>
-
   <footer>
     <div class="lang-badge">🎙️ <b>zh-CN</b></div>
     <button id="micBtn" aria-label="Start listening">
@@ -170,13 +158,11 @@
     </button>
     <button class="clear-btn" id="clearBtn">ล้างข้อความ</button>
   </footer>
-
   <div class="unsupported" id="unsupported">
     <h2>เบราว์เซอร์นี้ยังไม่รองรับ</h2>
     <p>ฟีเจอร์ฟังเสียงแบบเรียลไทม์ต้องใช้ Chrome (บน Android หรือคอมพิวเตอร์) เนื่องจากใช้ Web Speech API ของเบราว์เซอร์<br><br>กรุณาเปิดหน้านี้ด้วย Chrome แล้วลองอีกครั้ง</p>
   </div>
 </div>
-
 <script>
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const zhContent = document.getElementById('zhContent');
@@ -197,13 +183,12 @@ if(!SpeechRecognition){
 function initApp(){
   let recognition = new SpeechRecognition();
   recognition.lang = 'zh-CN';
-  recognition.continuous = true;
+  recognition.continuous = false;
   recognition.interimResults = true;
 
   let listening = false;
   let interimEl = null;
-  let firstUtterance = true;
-  let audioCtx, analyser, micStream, rafId;
+  let rafId, pulsePhase = 0, speechActive = false;
 
   function clearPlaceholder(container){
     const ph = container.querySelector('.placeholder');
@@ -273,14 +258,16 @@ function initApp(){
   };
 
   recognition.onerror = (e) => {
-    if(e.error === 'no-speech') return;
+    if(e.error === 'no-speech' || e.error === 'aborted'){ return; }
     setListening(false);
     statusText.textContent = 'เกิดข้อผิดพลาด: ' + e.error;
   };
 
+  recognition.onspeechstart = () => { speechActive = true; };
+  recognition.onspeechend = () => { speechActive = false; };
+
   recognition.onend = () => {
     if(listening){
-      // auto-restart to keep continuous listening alive (browsers stop it periodically)
       try{ recognition.start(); }catch(e){}
     }
   };
@@ -291,10 +278,11 @@ function initApp(){
     statusPill.classList.toggle('on', on);
     statusText.textContent = on ? 'กำลังฟัง…' : 'พร้อมใช้งาน';
     if(on){
-      startAudioViz();
+      startPulse();
       try{ recognition.start(); }catch(e){}
     } else {
-      stopAudioViz();
+      stopPulse();
+      speechActive = false;
       if(interimEl){ interimEl.remove(); interimEl = null; }
       try{ recognition.stop(); }catch(e){}
     }
@@ -308,7 +296,6 @@ function initApp(){
     interimEl = null;
   });
 
-  /* ---------- audio-reactive pulse divider ---------- */
   const canvas = document.getElementById('pulseCanvas');
   const ctx = canvas.getContext('2d');
   function resizeCanvas(){
@@ -318,30 +305,7 @@ function initApp(){
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas();
 
-  let dataArray, bufferLength;
-
-  async function startAudioViz(){
-    try{
-      micStream = await navigator.mediaDevices.getUserMedia({ audio:true });
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const source = audioCtx.createMediaStreamSource(micStream);
-      analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 64;
-      bufferLength = analyser.frequencyBinCount;
-      dataArray = new Uint8Array(bufferLength);
-      source.connect(analyser);
-      drawPulse();
-    }catch(e){
-      drawIdle();
-    }
-  }
-
-  function stopAudioViz(){
-    if(rafId) cancelAnimationFrame(rafId);
-    if(micStream) micStream.getTracks().forEach(t => t.stop());
-    if(audioCtx) audioCtx.close();
-    drawIdle();
-  }
+  const barCount = 28;
 
   function drawIdle(){
     const w = canvas.width, h = canvas.height;
@@ -355,16 +319,17 @@ function initApp(){
   }
   drawIdle();
 
-  function drawPulse(){
-    rafId = requestAnimationFrame(drawPulse);
-    analyser.getByteFrequencyData(dataArray);
+  function drawPulseFrame(){
+    rafId = requestAnimationFrame(drawPulseFrame);
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0,0,w,h);
     const mid = h/2;
-    const barCount = bufferLength;
     const barWidth = w / barCount;
+    pulsePhase += speechActive ? 0.35 : 0.08;
     for(let i=0;i<barCount;i++){
-      const v = dataArray[i] / 255;
+      const base = speechActive ? 0.55 : 0.12;
+      const amp = speechActive ? 0.4 : 0.06;
+      const v = base + amp * Math.abs(Math.sin(pulsePhase + i * 0.55));
       const barH = Math.max(2*devicePixelRatio, v * h * 0.85);
       const x = i * barWidth;
       const t = i / barCount;
@@ -374,6 +339,15 @@ function initApp(){
       ctx.fillStyle = `rgb(${r},${g},${b})`;
       ctx.fillRect(x, mid - barH/2, Math.max(1, barWidth-2*devicePixelRatio), barH);
     }
+  }
+
+  function startPulse(){
+    if(rafId) cancelAnimationFrame(rafId);
+    drawPulseFrame();
+  }
+  function stopPulse(){
+    if(rafId) cancelAnimationFrame(rafId);
+    drawIdle();
   }
 }
 </script>
