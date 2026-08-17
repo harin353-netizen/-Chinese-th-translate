@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>中泰 · 即时翻译</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&family=Noto+Sans+Thai:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#12151b;
+    --surface:#1a1e27;
+    --surface-2:#20242f;
+    --line: #2b3040;
+    --zh:#7fd8dc;
+    --zh-dim:#4d7a7c;
+    --th:#f3ab5f;
+    --th-dim:#8a6a44;
+    --text:#eae7e0;
+    --text-dim:#8a8d98;
+    --live:#e8593f;
+    --live-glow: rgba(232,89,63,0.35);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    height:100%; margin:0; background:var(--ink); color:var(--text);
+    font-family:'Inter',sans-serif; overflow:hidden;
+    overscroll-behavior:none;
+  }
+  #app{
+    display:flex; flex-direction:column; height:100vh; height:100dvh; width:100vw;
+    padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);
+  }
+
+  /* ---------- Header ---------- */
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px 10px 18px; flex-shrink:0;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{
+    width:26px; height:26px; border-radius:8px;
+    background: linear-gradient(135deg, var(--zh), var(--th));
+    display:flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:700; color:#12151b;
+  }
+  .brand-text{ font-size:13px; font-weight:600; letter-spacing:0.02em; color:var(--text-dim); }
+  .brand-text b{ color:var(--text); }
+  .status-pill{
+    display:flex; align-items:center; gap:6px;
+    font-size:11px; font-weight:600; color:var(--text-dim);
+    padding:5px 10px; border-radius:999px; background:var(--surface); border:1px solid var(--line);
+  }
+  .dot{ width:6px; height:6px; border-radius:50%; background:var(--text-dim); transition:all .2s; }
+  .status-pill.on .dot{ background:var(--live); box-shadow:0 0 8px var(--live-glow); animation: blink 1.2s ease-in-out infinite; }
+  .status-pill.on{ color:#f0a99b; border-color: rgba(232,89,63,0.3); }
+  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+
+  /* ---------- Panels ---------- */
+  .panels{ flex:1; display:flex; flex-direction:column; min-height:0; position:relative; }
+  .panel{
+    flex:1; min-height:0; overflow-y:auto; padding:10px 18px 22px 18px;
+    scroll-behavior:smooth;
+  }
+  .panel::-webkit-scrollbar{ width:0; }
+  .panel-label{
+    position:sticky; top:0; z-index:2; font-family:'Inter',sans-serif;
+    font-size:10px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase;
+    padding:6px 0 10px 0; backdrop-filter: blur(6px);
+  }
+  #zhPanel{ background: linear-gradient(180deg, var(--ink) 0%, #14181f 100%); }
+  #thPanel{ background: linear-gradient(180deg, #14181f 0%, var(--ink) 100%); }
+  #zhPanel .panel-label{ color:var(--zh-dim); background: linear-gradient(180deg, var(--ink) 60%, transparent);}
+  #thPanel .panel-label{ color:var(--th-dim); background: linear-gradient(180deg, #14181f 60%, transparent);}
+
+  .line{
+    margin-bottom:14px; line-height:1.5; opacity:0; transform:translateY(6px);
+    animation: rise .35s ease forwards;
+  }
+  @keyframes rise{ to{opacity:1; transform:translateY(0);} }
+  #zhPanel .line{ font-family:'Noto Sans SC', sans-serif; font-size:20px; font-weight:600; color:var(--text); }
+  #thPanel .line{ font-family:'Noto Sans Thai', sans-serif; font-size:19px; font-weight:400; color:var(--text); }
+  .line.interim{ color:var(--text-dim); font-weight:400; }
+  .line.pending{ color:var(--th-dim); font-style:normal; }
+  .placeholder{ color:var(--text-dim); font-size:13px; padding:30px 0; text-align:center; opacity:.7; }
+  #zhPanel .placeholder{ font-family:'Inter',sans-serif; }
+  #thPanel .placeholder{ font-family:'Inter',sans-serif; }
+
+  /* ---------- Pulse divider (signature element) ---------- */
+  .divider{
+    height:34px; flex-shrink:0; position:relative; z-index:3;
+    background:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  }
+  #pulseCanvas{ width:100%; height:100%; display:block; }
+
+  /* ---------- Footer / controls ---------- */
+  footer{
+    flex-shrink:0; padding:16px 18px calc(18px + env(safe-area-inset-bottom)) 18px;
+    display:flex; align-items:center; justify-content:center; gap:22px;
+    background:var(--ink);
+  }
+  .lang-badge{
+    font-size:12px; color:var(--text-dim); font-weight:500;
+    display:flex; align-items:center; gap:6px; min-width:96px;
+  }
+  .lang-badge b{ color:var(--text); font-weight:600; }
+  #micBtn{
+    width:66px; height:66px; border-radius:50%; border:none; cursor:pointer;
+    background: var(--surface); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    transition: all .2s ease; flex-shrink:0; position:relative;
+  }
+  #micBtn svg{ width:26px; height:26px; }
+  #micBtn.recording{
+    background: linear-gradient(135deg, var(--live), #c9432c);
+    box-shadow: 0 0 0 8px var(--live-glow);
+  }
+  #micBtn:active{ transform:scale(0.94); }
+  .clear-btn{
+    font-size:12px; color:var(--text-dim); background:none; border:none; cursor:pointer;
+    padding:8px; min-width:96px; text-align:right;
+  }
+  .clear-btn:active{ color:var(--text); }
+
+  .unsupported{
+    display:none; flex-direction:column; align-items:center; justify-content:center;
+    height:100%; text-align:center; padding:40px; gap:14px;
+  }
+  .unsupported.show{ display:flex; }
+  .unsupported h2{ font-size:17px; margin:0; color:var(--text); }
+  .unsupported p{ font-size:14px; color:var(--text-dim); line-height:1.6; margin:0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="brand-mark">译</div>
+      <div class="brand-text">中文 → <b>ไทย</b></div>
+    </div>
+    <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">พร้อมใช้งาน</span></div>
+  </header>
+
+  <div class="panels">
+    <div class="panel" id="zhPanel">
+      <div class="panel-label">中文原文 · Speech</div>
+      <div id="zhContent"><div class="placeholder">กดปุ่มไมค์เพื่อเริ่มฟัง — พูดภาษาจีน</div></div>
+    </div>
+    <div class="divider"><canvas id="pulseCanvas"></canvas></div>
+    <div class="panel" id="thPanel">
+      <div class="panel-label">คำแปลไทย · Translation</div>
+      <div id="thContent"><div class="placeholder">คำแปลจะขึ้นที่นี่แบบเรียลไทม์</div></div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="lang-badge">🎙️ <b>zh-CN</b></div>
+    <button id="micBtn" aria-label="Start listening">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#eae7e0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+        <line x1="12" y1="19" x2="12" y2="23"></line>
+      </svg>
+    </button>
+    <button class="clear-btn" id="clearBtn">ล้างข้อความ</button>
+  </footer>
+
+  <div class="unsupported" id="unsupported">
+    <h2>เบราว์เซอร์นี้ยังไม่รองรับ</h2>
+    <p>ฟีเจอร์ฟังเสียงแบบเรียลไทม์ต้องใช้ Chrome (บน Android หรือคอมพิวเตอร์) เนื่องจากใช้ Web Speech API ของเบราว์เซอร์<br><br>กรุณาเปิดหน้านี้ด้วย Chrome แล้วลองอีกครั้ง</p>
+  </div>
+</div>
+
+<script>
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const zhContent = document.getElementById('zhContent');
+const thContent = document.getElementById('thContent');
+const micBtn = document.getElementById('micBtn');
+const clearBtn = document.getElementById('clearBtn');
+const statusPill = document.getElementById('statusPill');
+const statusText = document.getElementById('statusText');
+
+if(!SpeechRecognition){
+  document.getElementById('unsupported').classList.add('show');
+  document.querySelector('.panels').style.display='none';
+  document.querySelector('footer').style.display='none';
+} else {
+  initApp();
+}
+
+function initApp(){
+  let recognition = new SpeechRecognition();
+  recognition.lang = 'zh-CN';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+
+  let listening = false;
+  let interimEl = null;
+  let firstUtterance = true;
+  let audioCtx, analyser, micStream, rafId;
+
+  function clearPlaceholder(container){
+    const ph = container.querySelector('.placeholder');
+    if(ph) ph.remove();
+  }
+
+  function addFinalLine(zhText){
+    clearPlaceholder(zhContent);
+    clearPlaceholder(thContent);
+    const zhLine = document.createElement('div');
+    zhLine.className = 'line';
+    zhLine.textContent = zhText;
+    zhContent.appendChild(zhLine);
+    zhContent.scrollTop = zhContent.scrollHeight;
+
+    const thLine = document.createElement('div');
+    thLine.className = 'line pending';
+    thLine.textContent = '…';
+    thContent.appendChild(thLine);
+    thContent.scrollTop = thContent.scrollHeight;
+
+    translateText(zhText).then(translated => {
+      thLine.classList.remove('pending');
+      thLine.textContent = translated;
+      thContent.scrollTop = thContent.scrollHeight;
+    }).catch(() => {
+      thLine.classList.remove('pending');
+      thLine.textContent = '⚠️ แปลไม่สำเร็จ (เช็คอินเทอร์เน็ต)';
+    });
+  }
+
+  function updateInterim(text){
+    clearPlaceholder(zhContent);
+    if(!text){
+      if(interimEl){ interimEl.remove(); interimEl = null; }
+      return;
+    }
+    if(!interimEl){
+      interimEl = document.createElement('div');
+      interimEl.className = 'line interim';
+      zhContent.appendChild(interimEl);
+    }
+    interimEl.textContent = text;
+    zhContent.scrollTop = zhContent.scrollHeight;
+  }
+
+  async function translateText(text){
+    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=zh-CN&tl=th&dt=t&q=' + encodeURIComponent(text);
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('translate failed');
+    const data = await res.json();
+    return data[0].map(chunk => chunk[0]).join('');
+  }
+
+  recognition.onresult = (event) => {
+    let interim = '';
+    for(let i = event.resultIndex; i < event.results.length; i++){
+      const res = event.results[i];
+      if(res.isFinal){
+        if(interimEl){ interimEl.remove(); interimEl = null; }
+        addFinalLine(res[0].transcript.trim());
+      } else {
+        interim += res[0].transcript;
+      }
+    }
+    if(interim) updateInterim(interim);
+  };
+
+  recognition.onerror = (e) => {
+    if(e.error === 'no-speech') return;
+    setListening(false);
+    statusText.textContent = 'เกิดข้อผิดพลาด: ' + e.error;
+  };
+
+  recognition.onend = () => {
+    if(listening){
+      // auto-restart to keep continuous listening alive (browsers stop it periodically)
+      try{ recognition.start(); }catch(e){}
+    }
+  };
+
+  function setListening(on){
+    listening = on;
+    micBtn.classList.toggle('recording', on);
+    statusPill.classList.toggle('on', on);
+    statusText.textContent = on ? 'กำลังฟัง…' : 'พร้อมใช้งาน';
+    if(on){
+      startAudioViz();
+      try{ recognition.start(); }catch(e){}
+    } else {
+      stopAudioViz();
+      if(interimEl){ interimEl.remove(); interimEl = null; }
+      try{ recognition.stop(); }catch(e){}
+    }
+  }
+
+  micBtn.addEventListener('click', () => setListening(!listening));
+
+  clearBtn.addEventListener('click', () => {
+    zhContent.innerHTML = '<div class="placeholder">กดปุ่มไมค์เพื่อเริ่มฟัง — พูดภาษาจีน</div>';
+    thContent.innerHTML = '<div class="placeholder">คำแปลจะขึ้นที่นี่แบบเรียลไทม์</div>';
+    interimEl = null;
+  });
+
+  /* ---------- audio-reactive pulse divider ---------- */
+  const canvas = document.getElementById('pulseCanvas');
+  const ctx = canvas.getContext('2d');
+  function resizeCanvas(){
+    canvas.width = canvas.clientWidth * devicePixelRatio;
+    canvas.height = canvas.clientHeight * devicePixelRatio;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  let dataArray, bufferLength;
+
+  async function startAudioViz(){
+    try{
+      micStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(micStream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      bufferLength = analyser.frequencyBinCount;
+      dataArray = new Uint8Array(bufferLength);
+      source.connect(analyser);
+      drawPulse();
+    }catch(e){
+      drawIdle();
+    }
+  }
+
+  function stopAudioViz(){
+    if(rafId) cancelAnimationFrame(rafId);
+    if(micStream) micStream.getTracks().forEach(t => t.stop());
+    if(audioCtx) audioCtx.close();
+    drawIdle();
+  }
+
+  function drawIdle(){
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0,0,w,h);
+    ctx.strokeStyle = '#2b3040';
+    ctx.lineWidth = 2 * devicePixelRatio;
+    ctx.beginPath();
+    ctx.moveTo(0, h/2);
+    ctx.lineTo(w, h/2);
+    ctx.stroke();
+  }
+  drawIdle();
+
+  function drawPulse(){
+    rafId = requestAnimationFrame(drawPulse);
+    analyser.getByteFrequencyData(dataArray);
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0,0,w,h);
+    const mid = h/2;
+    const barCount = bufferLength;
+    const barWidth = w / barCount;
+    for(let i=0;i<barCount;i++){
+      const v = dataArray[i] / 255;
+      const barH = Math.max(2*devicePixelRatio, v * h * 0.85);
+      const x = i * barWidth;
+      const t = i / barCount;
+      const r = Math.round(127 + (243-127)*t);
+      const g = Math.round(216 + (171-216)*t);
+      const b = Math.round(220 + (95-220)*t);
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(x, mid - barH/2, Math.max(1, barWidth-2*devicePixelRatio), barH);
+    }
+  }
+}
+</script>
+</body>
+</html>
